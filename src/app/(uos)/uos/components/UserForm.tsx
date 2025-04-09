@@ -2,19 +2,25 @@
 "use client";
 
 import { useRef, useTransition, Suspense } from "react";
-import { addUser } from "../actions";
+import { addUser } from "../actions"; // Import State from actions
 import { useActionState } from "react";
+
+import { State } from "../types";
 
 import { useOptimistic } from "react";
 import type { User } from "../actions";
+import { z } from "zod";
+import { userSchema } from "../lib/schemas";
 
 export function UserForm({ users }: { users: User[] }) {
   const formRef = useRef<HTMLFormElement>(null);
 
   // useActionState to handle form submission state
-  const [state, formAction] = useActionState(addUser, {
+  const [state, formAction] = useActionState<State, FormData>(addUser, {
     error: undefined,
     success: false,
+    errors: { name: undefined, email: undefined },
+    message: undefined,
   });
 
   // To track pending state separately
@@ -41,10 +47,22 @@ export function UserForm({ users }: { users: User[] }) {
 
     // Use startTransition to handle pending state and optimistic update
     startTransition(() => {
+      // Add optimistic update
       addOptimisticUser(optimisticUser);
       formAction(formData);
       formRef.current?.reset();
     });
+  };
+
+  // Helper to handle different error formats
+  const renderErrors = (errors: string[] | undefined) => {
+    if (!errors) return null;
+
+    return errors.map((error, index) => (
+      <p key={index} className="text-red-500 text-sm mt-1">
+        {error}
+      </p>
+    ));
   };
 
   return (
@@ -63,6 +81,7 @@ export function UserForm({ users }: { users: User[] }) {
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
             required
           />
+          {state?.errors?.name && renderErrors(state.errors.name)}
         </div>
 
         <div>
@@ -76,6 +95,7 @@ export function UserForm({ users }: { users: User[] }) {
             className="mt-1 block w-full rounded-md border border-gray-300 px-3 py-2"
             required
           />
+          {state?.errors?.email && renderErrors(state.errors.email)}
         </div>
 
         <button type="submit" disabled={isPending}>
@@ -84,6 +104,10 @@ export function UserForm({ users }: { users: User[] }) {
 
         {state.error && (
           <p className="text-red-500 text-sm mt-2">{state.error}</p>
+        )}
+
+        {state.message && !state.error && (
+          <p className="text-green-500 text-sm mt-2">{state.message}</p>
         )}
       </form>
 

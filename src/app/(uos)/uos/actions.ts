@@ -3,6 +3,9 @@
 
 import { revalidatePath } from "next/cache";
 import { sleep } from "../uos/utils";
+import { z } from "zod";
+import { UserSchemaType, userSchema } from "./lib/schemas";
+import { State, Errors } from "./types"; // Import State and Errors
 
 export type User = {
   id: string;
@@ -23,21 +26,28 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function addUser(
-  prevState: { error?: string; success?: boolean },
+  prevState: State,
   formData: FormData
-) {
+): Promise<State> {
   try {
-    const name = formData.get("name") as string;
-    const email = formData.get("email") as string;
+    const validatedFields = userSchema.safeParse({
+      name: formData.get("name"),
+      email: formData.get("email"),
+    });
 
-    // Validation
-    if (!name || !email) {
-      throw new Error("Нэр болон и-мэйл хаяг оруулна уу");
+    if (!validatedFields.success) {
+      const fieldErrors = validatedFields.error.flatten().fieldErrors;
+      console.log(fieldErrors);
+      return {
+        ...prevState,
+        errors: fieldErrors as Errors, // Use the imported Errors type
+        message: "Missing or invalid fields.",
+        success: false,
+        error: undefined,
+      };
     }
 
-    if (email.indexOf("@") === -1) {
-      throw new Error("Зөв и-мэйл хаяг оруулна уу");
-    }
+    const { name, email } = validatedFields.data;
 
     // Simulate network delay
     await sleep(2000);
@@ -55,9 +65,23 @@ export async function addUser(
     revalidatePath("/");
 
     // Return success state
-    return { success: true };
-  } catch (error) {
-    // Return error if something went wrong
-    return { error: error instanceof Error ? error.message : "Unknown error" };
+    return {
+      ...prevState,
+      success: true,
+      message: "User added successfully!",
+      errors: undefined,
+      error: undefined,
+    };
+  } catch (error: any) {
+    console.error("Error adding user:", error);
+    const errorMessage =
+      error instanceof Error ? error.message : "Unknown error";
+    return {
+      ...prevState,
+      error: errorMessage, // Use the specific error message
+      success: false,
+      errors: undefined,
+      message: "Failed to add user.",
+    };
   }
 }
